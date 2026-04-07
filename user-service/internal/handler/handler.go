@@ -4,7 +4,16 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/lonaas1337-sudo/vinylvault/user-service/internal/model"
+	"github.com/lonaas1337-sudo/vinylvault/user-service/internal/repository"
 )
+
+var repo *repository.UserRepository
+
+func SetRepository(r *repository.UserRepository) {
+	repo = r
+}
 
 type HealthResponse struct {
 	Status  string `json:"status"`
@@ -37,22 +46,36 @@ type RegisterResponse struct {
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	var user UserRequest
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
+	var req UserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error": "invalid json"}`, http.StatusBadRequest)
 		return
 	}
 
-	if user.Email == "" || user.Password == "" {
+	if req.Email == "" || req.Password == "" {
 		http.Error(w, `{"error": "email and password are required"}`, http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("Received user registration for email %s", user.Email)
+	log.Printf("Received user registration for email %s", req.Email)
+
+	user, err := model.NewUser(req.Email, req.Password)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	userId, err := repo.CreateUser(r.Context(), user)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	resp := RegisterResponse{
 		Message: "user registered successfully",
-		ID:      123,
+		ID:      userId,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -60,5 +83,6 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 }

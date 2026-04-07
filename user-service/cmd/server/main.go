@@ -12,15 +12,22 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/lonaas1337-sudo/vinylvault/user-service/internal/config"
 	"github.com/lonaas1337-sudo/vinylvault/user-service/internal/handler"
+	"github.com/lonaas1337-sudo/vinylvault/user-service/internal/repository"
 )
 
 func main() {
-	port := os.Getenv("PORT")
+	cfg := config.Load()
 
-	if port == "" {
-		port = "8081"
+	repo, err := repository.NewUserRepository(cfg)
+	if err != nil {
+		log.Fatalf("Failed to conntect to database: %v", err)
 	}
+
+	defer repo.Close()
+	handler.SetRepository(repo)
+	fmt.Println("Successfully connected to PostgreSQL!")
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -29,13 +36,13 @@ func main() {
 	r.Post("/users/register", handler.RegisterHandler)
 
 	srv := &http.Server{
-		Addr:    ":" + port,
+		Addr:    ":" + cfg.Port,
 		Handler: r,
 	}
 
 	// Start server in the background
 	go func() {
-		fmt.Printf("User service starting on http://localhost:%s\n", port)
+		fmt.Printf("User service starting on http://localhost:%s\n", cfg.Port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed: %v", err)
 		}
